@@ -155,14 +155,14 @@ struct CallOp : public Op {
 };
 
 struct AssignOp : public Op {
-    AssignOp(Binding name, Val val) : Op(Op::ASSIGN), name(name), val(val) {};
+    AssignOp(Binding lhs, Arg rhs) : Op(Op::ASSIGN), lhs(lhs), rhs(rhs) {};
 
-    Binding name;
-    Val val;
+    Binding lhs;
+    Arg rhs;
 
     void dump() const override {
-        print("ASSIGN: {} = ",name);
-        val.dump();
+        print("ASSIGN: {} = ", lhs);
+        //rhs.dump();
         println("");
     }
 };
@@ -278,7 +278,18 @@ auto eval(Op& op, const Environment& env) -> Environment {
     case Op::ASSIGN:
     {
         AssignOp& assign = static_cast<AssignOp&>(op);
-        new_env.bindings[assign.name] = assign.val;
+
+        Val new_val;
+        if (Binding* binding = std::get_if<Binding>(&assign.rhs)) {
+            if (!env.contains(*binding)) {
+                // TODO return a completion or failure here
+                throw std::runtime_error(std::format("unresolved binding: {}", *binding));
+            }
+            new_val = env.get(*binding);
+        } else {
+            new_val = std::get<Val>(assign.rhs);
+        }
+        new_env.bindings[assign.lhs] = new_val;
         break;
     }
     case Op::CALL:
@@ -342,6 +353,9 @@ auto main() -> int {
                     std::make_shared<AssignOp>(Binding("y"), Val{i64(2)}),
                     std::make_shared<AddOp>(Binding("z"), Binding("x"), Binding("y")),
                     std::make_shared<MulOp>(Binding("zz"), Binding("z"), Binding("z")),
+                    std::make_shared<AssignOp>(Binding("x"), Binding("zz")),
+                    // reference error
+                    std::make_shared<AssignOp>(Binding("x"), Binding("bad")),
                 }
             },
         },
